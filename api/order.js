@@ -1,4 +1,4 @@
-const { Pool } = require("pg");
+import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -7,7 +7,7 @@ const pool = new Pool({
   },
 });
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed",
@@ -75,4 +75,4 @@ module.exports = async (req, res) => {
       error: e.message,
     });
   }
-};
+}
