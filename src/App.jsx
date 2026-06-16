@@ -2,6 +2,48 @@ import { useState, useEffect, useRef } from "react";
 
 const tg = window.Telegram?.WebApp;
 
+// === НАСТРОЙКА УВЕДОМЛЕНИЙ О ЗАКАЗАХ ===
+// 1. Создайте бота через @BotFather, получите токен (выглядит как "123456:ABC-DEF...")
+// 2. Узнайте chat_id админа: напишите боту /start, затем откройте в браузере
+//    https://api.telegram.org/bot<ТОКЕН>/getUpdates и найдите "chat":{"id": ...}
+// 3. Вставьте оба значения ниже
+const BOT_TOKEN = "8012479392:AAENgPRjcQlHGEJ1SKWlbSLjFoVhA2cPAAU"; // например "123456789:AAExampleTokenHere"
+const ADMIN_CHAT_ID = "-5570401001"; // например "987654321"
+
+async function sendOrderToAdmin(order) {
+  if (!BOT_TOKEN || !ADMIN_CHAT_ID) {
+    console.warn("Бот не настроен: заполните BOT_TOKEN и ADMIN_CHAT_ID");
+    return { ok: false, reason: "not_configured" };
+  }
+  const user = tg?.initDataUnsafe?.user;
+  const username = user?.username ? `@${user.username}` : "(без username, id: " + (user?.id || "—") + ")";
+
+  const itemsText = order.items
+    .map(i => `• ${i.name} (${i.selectedSize}), ${i.qty} шт. — ${formatPrice(i.price * i.qty)}`)
+    .join("\n");
+
+  const text =
+    `🛍 Новый заказ ${order.number}\n\n` +
+    `От: ${username}\n\n` +
+    `Товары:\n${itemsText}\n\n` +
+    `Сумма: ${formatPrice(order.total)}\n\n` +
+    `Имя: ${order.name}\n` +
+    `Телефон: ${order.phone}\n` +
+    `Адрес: ${order.address}`;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text }),
+    });
+    const data = await res.json();
+    return { ok: data.ok, data };
+  } catch (e) {
+    return { ok: false, reason: "network_error", error: e };
+  }
+}
+
 const CATEGORIES = [
   { id: "all", label: "Все", icon: "✦" },
   { id: "new", label: "Новинки", icon: "★" },
@@ -11,35 +53,47 @@ const CATEGORIES = [
 ];
 
 const PRODUCTS = [
-  { id: 1, name: "Пальто Minimal", price: 12900, oldPrice: 17500, category: "women", tag: "Хит", colors: ["#1a1a1a", "#8B7355", "#C4C4C4"], sizes: ["XS","S","M","L"], img: "coat" },
-  { id: 2, name: "Тренч Structured", price: 15400, category: "women", tag: "Новинка", colors: ["#C4A882", "#1a1a1a"], sizes: ["S","M","L","XL"], img: "trench" },
-  { id: 3, name: "Куртка Utility", price: 8900, oldPrice: 11200, category: "men", tag: "Sale", colors: ["#3D4A3A", "#1a1a1a", "#6B5B45"], sizes: ["S","M","L","XL","XXL"], img: "jacket" },
-  { id: 4, name: "Брюки Wide", price: 6400, category: "men", colors: ["#1a1a1a", "#F5F0E8"], sizes: ["XS","S","M","L","XL"], img: "pants" },
-  { id: 5, name: "Жакет Boxy", price: 9800, category: "women", tag: "Новинка", colors: ["#E8E0D5", "#1a1a1a", "#8B7355"], sizes: ["XS","S","M","L"], img: "blazer" },
-  { id: 6, name: "Сумка Minimal Tote", price: 4900, category: "accessories", tag: "Хит", colors: ["#C4A882", "#1a1a1a", "#E8E0D5"], sizes: ["ONE SIZE"], img: "bag" },
-  { id: 7, name: "Ремень Leather", price: 2900, category: "accessories", colors: ["#1a1a1a", "#8B7355"], sizes: ["S/M","M/L"], img: "belt" },
-  { id: 8, name: "Свитер Oversize", price: 5600, oldPrice: 7800, category: "women", tag: "Sale", colors: ["#E8D5C8", "#94978A", "#1a1a1a"], sizes: ["XS","S","M","L"], img: "sweater" },
-  { id: 9, name: "Рубашка Poplin", price: 4200, category: "men", tag: "Новинка", colors: ["#F5F0E8", "#1a1a1a", "#B8C4C0"], sizes: ["S","M","L","XL"], img: "shirt" },
-  { id: 10, name: "Очки Geometric", price: 3800, category: "accessories", colors: ["#1a1a1a", "#C4A882"], sizes: ["ONE SIZE"], img: "glasses" },
+  { id: 1, name: "Пальто Minimal", price: 12900, oldPrice: 17500, category: "women", tag: "Хит", colors: ["#1a1a1a", "#8B7355", "#C4C4C4"], sizes: ["XS","S","M","L"], img: "coat", photos: [
+    "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&q=80",
+    "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&q=80",
+  ] },
+  { id: 2, name: "Тренч Structured", price: 15400, category: "women", tag: "Новинка", colors: ["#C4A882", "#1a1a1a"], sizes: ["S","M","L","XL"], img: "trench", photos: [
+    "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80",
+    "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=800&q=80",
+  ] },
+  { id: 3, name: "Куртка Utility", price: 8900, oldPrice: 11200, category: "men", tag: "Sale", colors: ["#3D4A3A", "#1a1a1a", "#6B5B45"], sizes: ["S","M","L","XL","XXL"], img: "jacket", photos: [
+    "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&q=80",
+    "https://images.unsplash.com/photo-1551489186-cf8726f514f8?w=800&q=80",
+  ] },
+  { id: 4, name: "Брюки Wide", price: 6400, category: "men", colors: ["#1a1a1a", "#F5F0E8"], sizes: ["XS","S","M","L","XL"], img: "pants", photos: [
+    "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&q=80",
+    "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&q=80&sat=-50",
+  ] },
+  { id: 5, name: "Жакет Boxy", price: 9800, category: "women", tag: "Новинка", colors: ["#E8E0D5", "#1a1a1a", "#8B7355"], sizes: ["XS","S","M","L"], img: "blazer", photos: [
+    "https://images.unsplash.com/photo-1551163943-3f6a855d1153?w=800&q=80",
+    "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&q=80",
+  ] },
+  { id: 6, name: "Сумка Minimal Tote", price: 4900, category: "accessories", tag: "Хит", colors: ["#C4A882", "#1a1a1a", "#E8E0D5"], sizes: ["ONE SIZE"], img: "bag", photos: [
+    "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=800&q=80",
+    "https://images.unsplash.com/photo-1590739225497-99a8e8a39c7a?w=800&q=80",
+  ] },
+  { id: 7, name: "Ремень Leather", price: 2900, category: "accessories", colors: ["#1a1a1a", "#8B7355"], sizes: ["S/M","M/L"], img: "belt", photos: [
+    "https://images.unsplash.com/photo-1611923134239-b9be5816e23c?w=800&q=80",
+    "https://images.unsplash.com/photo-1517257104747-1b3e718c5e6a?w=800&q=80",
+  ] },
+  { id: 8, name: "Свитер Oversize", price: 5600, oldPrice: 7800, category: "women", tag: "Sale", colors: ["#E8D5C8", "#94978A", "#1a1a1a"], sizes: ["XS","S","M","L"], img: "sweater", photos: [
+    "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&q=80",
+    "https://images.unsplash.com/photo-1620799140188-3b2a02fd9a77?w=800&q=80",
+  ] },
+  { id: 9, name: "Рубашка Poplin", price: 4200, category: "men", tag: "Новинка", colors: ["#F5F0E8", "#1a1a1a", "#B8C4C0"], sizes: ["S","M","L","XL"], img: "shirt", photos: [
+    "https://images.unsplash.com/photo-1598032895397-b9472444bf93?w=800&q=80",
+    "https://images.unsplash.com/photo-1564859228273-274232fdb516?w=800&q=80",
+  ] },
+  { id: 10, name: "Очки Geometric", price: 3800, category: "accessories", colors: ["#1a1a1a", "#C4A882"], sizes: ["ONE SIZE"], img: "glasses", photos: [
+    "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&q=80",
+    "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&q=80",
+  ] },
 ];
-
-const EMOJI_MAP = {
-  coat: "🧥", trench: "🥼", jacket: "🫵", pants: "👖", blazer: "👔",
-  bag: "👜", belt: "🩱", sweater: "🧶", shirt: "👕", glasses: "🕶️"
-};
-
-const GRADIENT_MAP = {
-  coat: "linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)",
-  trench: "linear-gradient(135deg, #C4A882 0%, #8B7355 100%)",
-  jacket: "linear-gradient(135deg, #3D4A3A 0%, #2a352a 100%)",
-  pants: "linear-gradient(135deg, #3a3a3a 0%, #1a1a1a 100%)",
-  blazer: "linear-gradient(135deg, #E8E0D5 0%, #C4BAB0 100%)",
-  bag: "linear-gradient(135deg, #D4BA9A 0%, #C4A882 100%)",
-  belt: "linear-gradient(135deg, #5a3e2b 0%, #3a2518 100%)",
-  sweater: "linear-gradient(135deg, #E8D5C8 0%, #C4A882 100%)",
-  shirt: "linear-gradient(135deg, #F5F0E8 0%, #E8E0D5 100%)",
-  glasses: "linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)",
-};
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Montserrat:wght@300;400;500;600&display=swap');
@@ -97,8 +151,7 @@ const styles = `
   .products-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); margin: 0 0 1px; }
   .product-card { background: var(--bg); cursor: pointer; position: relative; overflow: hidden; transition: background 0.2s; }
   .product-card:active { background: var(--bg3); }
-  .product-img { width: 100%; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; font-size: 52px; position: relative; overflow: hidden; }
-  .product-img-inner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  .product-img { width: 100%; height: 100%; position: relative; }
   .product-tag { position: absolute; top: 10px; left: 10px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; font-family: var(--font-sans); font-weight: 500; }
   .tag-hit { background: var(--gold); color: #0D0D0D; }
   .tag-new { background: transparent; border: 1px solid var(--text); color: var(--text); }
@@ -117,7 +170,7 @@ const styles = `
   .detail-page { animation: slideUp 0.3s ease; }
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
   .back-btn { display: flex; align-items: center; gap: 8px; padding: 14px 20px 0; background: none; border: none; color: var(--text2); font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
-  .detail-img { width: 100%; aspect-ratio: 1/1.1; display: flex; align-items: center; justify-content: center; font-size: 90px; }
+  .detail-img { width: 100%; height: 100%; position: relative; }
   .detail-body { padding: 20px; }
   .detail-name { font-family: var(--font-serif); font-size: 28px; font-weight: 300; line-height: 1.2; letter-spacing: 0.03em; }
   .detail-prices { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 20px; }
@@ -140,7 +193,8 @@ const styles = `
   .cart-empty-text { font-family: var(--font-serif); font-size: 22px; font-weight: 300; color: var(--text3); }
   .cart-empty-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.1em; }
   .cart-item { display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  .cart-img { width: 70px; height: 90px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
+  .cart-img { width: 70px; height: 90px; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .cart-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cart-details { flex: 1; }
   .cart-name { font-family: var(--font-serif); font-size: 16px; font-weight: 400; line-height: 1.3; margin-bottom: 4px; }
   .cart-meta { font-size: 11px; color: var(--text3); letter-spacing: 0.05em; margin-bottom: 10px; }
@@ -193,19 +247,113 @@ const styles = `
   .search-icon { color: var(--text3); font-size: 16px; }
   .search-input { flex: 1; background: none; border: none; color: var(--text); font-family: var(--font-sans); font-size: 13px; outline: none; }
   .search-input::placeholder { color: var(--text3); }
+
+  /* IMAGE GALLERY */
+  .gallery { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  .gallery-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; height: 100%; }
+  .gallery-track::-webkit-scrollbar { display: none; }
+  .gallery-slide { flex: 0 0 100%; scroll-snap-align: start; height: 100%; }
+  .gallery-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 5; }
+  .gallery-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.35); transition: all 0.2s; cursor: pointer; }
+  .gallery-dot-hit { padding: 8px; margin: -8px; display: flex; align-items: center; justify-content: center; }
+  .gallery-dot.active { background: var(--gold); width: 14px; border-radius: 3px; }
+  .gallery-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: rgba(13,13,13,0.55); border: 1px solid rgba(255,255,255,0.15); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 6; font-size: 14px; opacity: 0; transition: opacity 0.2s, background 0.2s; backdrop-filter: blur(2px); }
+  .gallery:hover .gallery-arrow { opacity: 1; }
+  .gallery-arrow:hover { background: rgba(13,13,13,0.8); }
+  .gallery-arrow.prev { left: 8px; }
+  .gallery-arrow.next { right: 8px; }
+  .gallery-img-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg3); font-size: 40px; color: var(--text3); }
+  @media (hover: none) {
+    .gallery-arrow { display: none; }
+  }
+  .product-img-card { width: 100%; aspect-ratio: 3/4; position: relative; }
+  .product-img-card .gallery, .product-img-card .gallery-track, .product-img-card .gallery-slide { height: 100%; }
+  .detail-img-card { width: 100%; aspect-ratio: 1/1.1; position: relative; }
+  .detail-img-card .gallery, .detail-img-card .gallery-track, .detail-img-card .gallery-slide { height: 100%; }
+
+  /* ORDER FORM */
+  .order-form { padding: 0 20px 20px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; display: block; }
+  .form-input { width: 100%; padding: 13px 14px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: var(--font-sans); font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .form-input:focus { border-color: var(--gold); }
+  .form-input::placeholder { color: var(--text3); }
+  .form-input.error { border-color: var(--red); }
+  .form-error { font-size: 11px; color: var(--red); margin-top: 6px; letter-spacing: 0.03em; }
+  .form-textarea { resize: none; font-family: var(--font-sans); min-height: 70px; }
+  .order-summary-box { background: var(--bg3); border: 1px solid var(--border); padding: 16px; margin-bottom: 20px; }
+  .order-summary-item { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); padding: 6px 0; }
+  .order-summary-item.bold { font-weight: 500; color: var(--text); font-size: 14px; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--border); }
+  .submit-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(13,13,13,0.3); border-top-color: #0D0D0D; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* CONFIRMATION SCREEN */
+  .confirm-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px 24px; text-align: center; }
+  .confirm-icon { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--gold); margin-bottom: 24px; animation: popIn 0.4s ease; }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+  .confirm-title { font-family: var(--font-serif); font-size: 28px; font-weight: 300; margin-bottom: 8px; }
+  .confirm-sub { font-size: 12px; color: var(--text2); letter-spacing: 0.05em; line-height: 1.7; max-width: 280px; margin-bottom: 28px; }
+  .confirm-number { font-family: var(--font-serif); font-size: 22px; color: var(--gold); letter-spacing: 0.1em; border: 1px solid var(--border2); padding: 12px 28px; margin-bottom: 32px; }
+  .confirm-btn { padding: 14px 32px; background: var(--gold); color: #0D0D0D; border: none; font-family: var(--font-sans); font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
 `;
 
 function formatPrice(p) {
   return p.toLocaleString("ru-RU") + " ₽";
 }
 
-function ProductImage({ product, size = "normal" }) {
-  const s = size === "large" ? { fontSize: 80 } : size === "small" ? { fontSize: 30 } : {};
+function ImageGallery({ photos, alt, className }) {
+  const trackRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [brokenIndexes, setBrokenIndexes] = useState({});
+
+  const handleScroll = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const idx = Math.round(track.scrollLeft / track.clientWidth);
+    setActiveIndex(idx);
+  };
+
+  const goTo = (index) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const clamped = (index + photos.length) % photos.length;
+    track.scrollTo({ left: clamped * track.clientWidth, behavior: "smooth" });
+    setActiveIndex(clamped);
+  };
+
+  const handleImgError = (i) => {
+    setBrokenIndexes(prev => ({ ...prev, [i]: true }));
+  };
+
   return (
-    <div className="product-img-inner" style={{ background: GRADIENT_MAP[product.img], ...s }}>
-      <span style={{ fontSize: size === "large" ? 80 : size === "small" ? 32 : 52, filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.4))" }}>
-        {EMOJI_MAP[product.img]}
-      </span>
+    <div className={className}>
+      <div className="gallery">
+        <div className="gallery-track" ref={trackRef} onScroll={handleScroll}>
+          {photos.map((src, i) => (
+            <div className="gallery-slide" key={i}>
+              {brokenIndexes[i] ? (
+                <div className="gallery-img-fallback">📷</div>
+              ) : (
+                <img src={src} alt={alt} loading="lazy" onError={() => handleImgError(i)} />
+              )}
+            </div>
+          ))}
+        </div>
+        {photos.length > 1 && (
+          <>
+            <button className="gallery-arrow prev" onClick={(e) => { e.stopPropagation(); goTo(activeIndex - 1); }} aria-label="Предыдущее фото">‹</button>
+            <button className="gallery-arrow next" onClick={(e) => { e.stopPropagation(); goTo(activeIndex + 1); }} aria-label="Следующее фото">›</button>
+            <div className="gallery-dots">
+              {photos.map((_, i) => (
+                <div key={i} className="gallery-dot-hit" onClick={(e) => { e.stopPropagation(); goTo(i); }}>
+                  <div className={`gallery-dot${i === activeIndex ? " active" : ""}`} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -244,8 +392,8 @@ function CatalogPage({ onProductClick, cart, favorites, toggleFav }) {
       <div className="products-grid">
         {filtered.map(p => (
           <div key={p.id} className="product-card" onClick={() => onProductClick(p)}>
-            <div className="product-img">
-              <ProductImage product={p} />
+            <div className="product-img-card">
+              <ImageGallery photos={p.photos} alt={p.name} className="product-img" />
               {p.tag && <span className={`product-tag tag-${p.tag === "Хит" ? "hit" : p.tag === "Новинка" ? "new" : "sale"}`}>{p.tag}</span>}
               <button className={`fav-btn${favorites.includes(p.id) ? " liked" : ""}`} onClick={e => { e.stopPropagation(); toggleFav(p.id); }}>
                 {favorites.includes(p.id) ? "♥" : "♡"}
@@ -284,8 +432,8 @@ function ProductDetail({ product, onBack, onAddToCart, cart }) {
   return (
     <div className="detail-page page">
       <button className="back-btn" onClick={onBack}>← Назад</button>
-      <div className="detail-img">
-        <ProductImage product={product} size="large" />
+      <div className="detail-img-card">
+        <ImageGallery photos={product.photos} alt={product.name} className="detail-img" />
       </div>
       <div className="detail-body">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -336,7 +484,7 @@ function ProductDetail({ product, onBack, onAddToCart, cart }) {
   );
 }
 
-function CartPage({ cart, updateQty, removeItem }) {
+function CartPage({ cart, updateQty, removeItem, onCheckout }) {
   const [promo, setPromo] = useState("");
   const [discount, setDiscount] = useState(0);
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -365,8 +513,8 @@ function CartPage({ cart, updateQty, removeItem }) {
       <div className="page-count">{cart.length} {cart.length === 1 ? "товар" : cart.length < 5 ? "товара" : "товаров"}</div>
       {cart.map(item => (
         <div key={item.cartKey} className="cart-item">
-          <div className="cart-img" style={{ background: GRADIENT_MAP[item.img] }}>
-            <span style={{ fontSize: 28 }}>{EMOJI_MAP[item.img]}</span>
+          <div className="cart-img">
+            <img src={item.photos[0]} alt={item.name} loading="lazy" />
           </div>
           <div className="cart-details">
             <div className="cart-name">{item.name}</div>
@@ -395,7 +543,7 @@ function CartPage({ cart, updateQty, removeItem }) {
         <div className="summary-row"><span>Доставка</span><span>{delivery === 0 ? "Бесплатно" : formatPrice(delivery)}</span></div>
         {delivery === 0 && <div style={{ fontSize: 10, color: "var(--gold)", letterSpacing: "0.08em", marginBottom: 8 }}>✓ Бесплатная доставка от 5 000 ₽</div>}
         <div className="summary-row total"><span>Итого</span><span style={{ color: "var(--gold)" }}>{formatPrice(total)}</span></div>
-        <button className="checkout-btn">Оформить заказ</button>
+        <button className="checkout-btn" onClick={() => onCheckout({ subtotal, discount, delivery, total })}>Оформить заказ</button>
       </div>
     </div>
   );
@@ -419,8 +567,8 @@ function FavoritesPage({ favorites, onProductClick, toggleFav }) {
       <div className="products-grid">
         {favProducts.map(p => (
           <div key={p.id} className="product-card" onClick={() => onProductClick(p)}>
-            <div className="product-img">
-              <ProductImage product={p} />
+            <div className="product-img-card">
+              <ImageGallery photos={p.photos} alt={p.name} className="product-img" />
               <button className="fav-btn liked" onClick={e => { e.stopPropagation(); toggleFav(p.id); }}>♥</button>
             </div>
             <div className="product-info">
@@ -502,12 +650,119 @@ function ProfilePage() {
   );
 }
 
+function OrderForm({ cart, totals, onBack, onSubmit }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [comment, setComment] = useState("");
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const user = tg?.initDataUnsafe?.user;
+    if (user?.first_name) setName(`${user.first_name} ${user.last_name || ""}`.trim());
+  }, []);
+
+  const validate = () => {
+    const errs = {};
+    if (name.trim().length < 2) errs.name = "Введите имя и фамилию";
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length < 10) errs.phone = "Введите корректный номер телефона";
+    if (address.trim().length < 5) errs.address = "Введите полный адрес доставки";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) {
+      tg?.HapticFeedback?.notificationOccurred?.("error");
+      return;
+    }
+    setSubmitting(true);
+    const orderNumber = "#" + Math.floor(100000 + Math.random() * 900000);
+    const order = {
+      number: orderNumber,
+      items: cart,
+      total: totals.total,
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      comment: comment.trim(),
+    };
+    const result = await sendOrderToAdmin(order);
+    setSubmitting(false);
+    tg?.HapticFeedback?.notificationOccurred?.("success");
+    onSubmit(order, result);
+  };
+
+  return (
+    <div className="page">
+      <button className="back-btn" onClick={onBack}>← Назад в корзину</button>
+      <div className="page-title" style={{ paddingTop: 12 }}>Оформление</div>
+      <div className="page-count">Заполните данные для доставки</div>
+
+      <div className="order-form" style={{ marginTop: 8 }}>
+        <div className="order-summary-box">
+          <div className="order-summary-item"><span>Товаров</span><span>{cart.reduce((s, i) => s + i.qty, 0)} шт.</span></div>
+          <div className="order-summary-item"><span>Доставка</span><span>{totals.delivery === 0 ? "Бесплатно" : formatPrice(totals.delivery)}</span></div>
+          {totals.discount > 0 && <div className="order-summary-item" style={{ color: "var(--red)" }}><span>Скидка</span><span>−{formatPrice(totals.discount)}</span></div>}
+          <div className="order-summary-item bold"><span>К оплате</span><span style={{ color: "var(--gold)" }}>{formatPrice(totals.total)}</span></div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Имя и фамилия</label>
+          <input className={`form-input${errors.name ? " error" : ""}`} placeholder="Например, Анна Иванова" value={name} onChange={e => setName(e.target.value)} />
+          {errors.name && <div className="form-error">{errors.name}</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Телефон</label>
+          <input className={`form-input${errors.phone ? " error" : ""}`} placeholder="+7 900 000-00-00" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
+          {errors.phone && <div className="form-error">{errors.phone}</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Адрес доставки</label>
+          <input className={`form-input${errors.address ? " error" : ""}`} placeholder="Город, улица, дом, квартира" value={address} onChange={e => setAddress(e.target.value)} />
+          {errors.address && <div className="form-error">{errors.address}</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Комментарий к заказу (необязательно)</label>
+          <textarea className="form-input form-textarea" placeholder="Например, удобное время доставки" value={comment} onChange={e => setComment(e.target.value)} />
+        </div>
+
+        <button className="checkout-btn" onClick={handleSubmit} disabled={submitting}>
+          {submitting && <span className="submit-spinner" />}
+          {submitting ? "Отправка заказа…" : `Подтвердить заказ · ${formatPrice(totals.total)}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OrderConfirmation({ order, onContinue }) {
+  return (
+    <div className="confirm-page">
+      <div className="confirm-icon">✓</div>
+      <h1 className="confirm-title">Заказ принят</h1>
+      <p className="confirm-sub">
+        Спасибо, {order.name.split(" ")[0]}! Мы получили ваш заказ и свяжемся с вами по телефону {order.phone} для подтверждения деталей доставки.
+      </p>
+      <div className="confirm-number">{order.number}</div>
+      <button className="confirm-btn" onClick={onContinue}>Вернуться в каталог</button>
+    </div>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState("catalog");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cart, setCart] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [toast, setToast] = useState({ visible: false, msg: "" });
+  const [checkoutTotals, setCheckoutTotals] = useState(null);
+  const [confirmedOrder, setConfirmedOrder] = useState(null);
 
   useEffect(() => {
     if (tg) {
@@ -549,12 +804,31 @@ export default function App() {
   const handleProductClick = (p) => { setSelectedProduct(p); };
   const handleBack = () => setSelectedProduct(null);
 
+  const handleCheckout = (totals) => setCheckoutTotals(totals);
+  const handleOrderFormBack = () => setCheckoutTotals(null);
+
+  const handleOrderSubmit = (order, result) => {
+    setConfirmedOrder(order);
+    setCheckoutTotals(null);
+    if (!result.ok) showToast("Заказ создан (уведомление боту не отправлено)");
+  };
+
+  const handleOrderContinue = () => {
+    setCart([]);
+    setConfirmedOrder(null);
+    setActivePage("catalog");
+  };
+
   return (
     <>
       <style>{styles}</style>
       <div className="app">
         <div className={`toast${toast.visible ? " show" : ""}`}>{toast.msg}</div>
-        {selectedProduct ? (
+        {confirmedOrder ? (
+          <OrderConfirmation order={confirmedOrder} onContinue={handleOrderContinue} />
+        ) : checkoutTotals ? (
+          <OrderForm cart={cart} totals={checkoutTotals} onBack={handleOrderFormBack} onSubmit={handleOrderSubmit} />
+        ) : selectedProduct ? (
           <ProductDetail product={selectedProduct} onBack={handleBack} onAddToCart={addToCart} cart={cart} />
         ) : (
           <>
@@ -572,12 +846,12 @@ export default function App() {
 
             {activePage === "catalog" && <CatalogPage onProductClick={handleProductClick} cart={cart} favorites={favorites} toggleFav={toggleFav} />}
             {activePage === "favorites" && <FavoritesPage favorites={favorites} onProductClick={handleProductClick} toggleFav={toggleFav} />}
-            {activePage === "cart" && <CartPage cart={cart} updateQty={updateQty} removeItem={removeItem} />}
+            {activePage === "cart" && <CartPage cart={cart} updateQty={updateQty} removeItem={removeItem} onCheckout={handleCheckout} />}
             {activePage === "profile" && <ProfilePage />}
           </>
         )}
 
-        {!selectedProduct && (
+        {!selectedProduct && !checkoutTotals && !confirmedOrder && (
           <nav className="bottom-nav">
             {[
               { id: "catalog", label: "Каталог", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
